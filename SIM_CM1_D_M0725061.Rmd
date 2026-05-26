@@ -1,0 +1,493 @@
+---
+title: Analisis Pengaruh Kategori dan Rating Film terhadap Pendapatan Rental pada Database Sakila
+author: "Anisa Sulistyowati | M0725061 | D"
+date: "2026-05-22"
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    df_print: paged
+    code_folding: show
+---
+
+# Deskripsi Insight
+```{=html}
+<style>
+.list-group-item.active {
+    background-color: #985377 !important;
+    border-color: #985377 !important;
+}
+</style>
+
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+    Database Sakila merupakan contoh database MySQL yang merepresentasikan sistem manajemen toko penyewaan DVD. Database Sakila menyediakan informasi mengenai film, kategori film, transaksi rental, serta pembayaran pelanggan. Analisis ini bertujuan untuk mengetahui kategori film dan rating film yang mampu menghasilkan pendapatan rental tertinggi sehingga dapat memberikan gambaran mengenai preferensi pelanggan terhadap jenis film tertentu.
+</p>
+<p>
+Variabel yang digunakan dalam analisis meliputi kategori film category <strong> (category) </strong>, rating film <strong> (rating)</strong>, dan jumlah pembayaran rental <strong> (amount) </strong>. Pendapatan rental diperoleh dari total pembayaran pelanggan pada setiap transaksi penyewaan film. Data kemudian divisualisasikan menggunakan grafik untuk melihat pola distribusi pendapatan berdasarkan kategori dan rating film, serta dianalisis menggunakan metode statistik untuk mengetahui pengaruh kedua variabel tersebut terhadap pendapatan rental.
+</p>
+<p>
+Melalui analisis ini diharapkan dapat diperoleh insight mengenai kategori dan rating film yang paling diminati pelanggan serta kontribusinya terhadap pendapatan bisnis rental film.
+  </p>
+</div>
+```
+
+```{css, echo=FALSE}
+.title {
+  text-align: center;
+}
+
+.author {
+  text-align: center;
+}
+
+.date {
+  text-align: center;
+}
+```
+
+# Visualisasi Data
+
+## Persiapan Data
+
+<p style="margin-bottom:-40px;">
+Instalasi dan pemuatan library
+</p>
+```{r setup, , message=FALSE, warning=FALSE}
+
+library(DBI)
+library(RMySQL)
+library(dplyr)
+library(ggplot2)
+
+```
+
+
+```{r koneksi, echo=FALSE}
+
+con <- dbConnect(
+  RMySQL::MySQL(),
+  dbname = "sakila",
+  host = "localhost",
+  user = "root",
+  password = "8122006a"
+)
+
+```
+
+<p style="margin-bottom:-40px;">
+Koneksi dan ambil tabel
+</p>
+```{r data, warning=FALSE}
+film <- dbReadTable(con, "film")
+film_category <- dbReadTable(con, "film_category")
+category <- dbReadTable(con, "category")
+inventory <- dbReadTable(con, "inventory")
+rental <- dbReadTable(con, "rental")
+payment <- dbReadTable(con, "payment")
+```
+
+<p style="margin-bottom:-40px;">
+Join data
+</p>
+```{r join}
+sakila_data <- payment %>%
+  left_join(rental, by = "rental_id") %>%
+  left_join(inventory, by = "inventory_id") %>%
+  left_join(film, by = "film_id") %>%
+  left_join(film_category, by = "film_id") %>%
+  left_join(category, by = "category_id")
+```
+
+
+## Bar chart pendapatan berdasarkan kategori film
+```{r viz1-revenue-kategori, fig.height=7 } 
+revenue_category <- sakila_data %>%
+  group_by(name) %>%
+  summarise(
+    total_revenue = sum(amount)
+  ) %>%
+  arrange(desc(total_revenue))
+
+ggplot(revenue_category,
+       aes(x = reorder(name, total_revenue),
+           y = total_revenue)) +
+  
+  geom_col(fill = "#754b61") +
+  
+  geom_text(
+    aes(label = scales::dollar(total_revenue)),
+    hjust = -0.1,
+    size = 3
+  ) +
+  
+  coord_flip() +
+  
+
+  labs(
+    title = "Pendapatan Rental Berdasarkan Kategori Film",
+    x = "Kategori Film",
+    y = "Total Pendapatan (USD)"
+  ) +
+  theme_minimal()
+
+```
+
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+   Berdasarkan bar chart di atas, terlihat bahwa terdapat perbedaan total pendapatan rental pada setiap kategori film. Kategori sports menghasilkan total pendapatan rental tertinggi dengan total revenue lebih dari $5000. Hal ini menunjukkan bahwa pelanggan memiliki minat tinggi pada film kategori sports. Sebaliknya, Kategori music memiliki total pendapatan rental terrendah dengan total revenue $3417,72. Visualisasi ini mengindikasikan bahwa kategori film dapat memengaruhi tingkat pendapatan rental pada bisnis penyewaan film. Semakin tinggi minat pelanggan terhadap suatu kategori film, maka semakin besar pula total transaksi rental yang dihasilkan.
+  </p>
+</div>
+```
+
+
+## Bar Chart Pendapatan per Rating
+```{r viz1-revenue-rating, fig.height=6} 
+revenue_rating <- sakila_data %>%
+  group_by(rating) %>%
+  summarise(
+    total_revenue = sum(amount)
+  )
+
+ggplot(revenue_rating,
+       aes(x = rating,
+           y = total_revenue)) +
+  
+  geom_col(fill = "#754b61") +
+  
+  scale_y_continuous(
+    labels = scales::dollar_format(),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  
+  labs(
+    title = "Pendapatan Rental Berdasarkan Rating Film",
+    x = "Rating Film",
+    y = "Total Pendapatan (USD)"
+  ) +
+  theme_minimal()
+```
+
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+   Visualisasi tersebut menunjukkan bahwa terdapat perbedaan total pendapatan rental pada setiap rating film. Rating PG-13 menghasilkan total pendapatan rental tertinggi dengan total revenue lebih dari $15000. Hal ini menunjukkan bahwa pelanggan memiliki minat tinggi pada film rating PG-13. Sebaliknya, rating G memiliki total pendapatan paling rendah daripada rating lain. Visualisasi ini menunjukkan bahwa rating film dapat memengaruhi tingkat pendapatan rental, tapi pengaruhnya tidak sesignifikan kategori film. Pelanggan lebih mempertimbangkan kategori dibanding rating film dalam melakukan penyewaan.
+  </p>
+</div>
+```
+
+
+## Heatmap Rating dan Kategori Film
+```{r heatmap, warning=FALSE}
+
+revenue_data <- sakila_data %>%
+  group_by(name, rating) %>%
+  summarise(
+    total_revenue = sum(amount),
+    .groups = "drop"
+  )
+
+ggplot(revenue_data,
+       aes(x = rating,
+           y = name,
+           fill = total_revenue)) +
+   geom_tile(color = "white", linewidth = 3) +
+
+  geom_text(aes(label = round(total_revenue,0)),
+            color = "white",
+            size = 3,
+            fontface = "bold") +
+
+  scale_fill_gradient(
+    low = "white",
+    high = "#3b0a2a"
+  ) +
+
+  labs(
+    title = "Heatmap Pendapatan Berdasarkan Rating dan Kategori Film",
+    subtitle = "Nilai dalam sel menunjukkan rata-rata revenue penyewaan (USD)",
+    x = "Rating Film",
+    y = "Kategori Film",
+    fill = "Rata-rata\nRevenue ($)"
+  ) +
+
+  theme_minimal() +
+
+  theme(
+    plot.title = element_text(
+      size = 14,
+      face = "bold"
+    ),
+     plot.subtitle = element_text(
+       size = 11, 
+       color = "#6c757d"),
+
+    axis.title = element_text(
+      size = 13
+    ),
+
+    axis.text = element_text(
+      size = 10,
+      face = "bold"
+    ),
+
+    legend.title = element_text(
+      size = 10
+    ),
+
+    panel.grid = element_blank()
+  )
+```
+
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+  Berdasarkan heatmap yang telah dibuat, terlihat bahwa kombinasi kategori dan rating film tertentu memiliki intensitas warna lebih tinggi dibanding kombinasi lainnya. Intensitas warna yang lebih tinggi menunjukkan total pendapatan rental yang lebih besar pada kombinasi tersebut. Beberapa kombinasi antara kategori dengan rating film seperti music dan NC-17, Drama dan PG-13, Foreign dan PG-13 menghasilkan total revenue yang lebih tinggi dari kombinasi lain. Sebaliknya, kombinasi Music dan G, Horror dan NC-17, Music dan PG-13 menunjukkan total revenue yang relatif rendah. oleh karena itu, meskipun rating film secara umum tidak memiliki pengaruh signifikan terhadap pendapatan rental, kombinasi antara kategori dan rating film sangat berpengaruh terhadap pendapatan rental.
+  </p>
+</div>
+```
+
+
+# Analisis Data
+
+## Total Pendapatan
+
+Total pendapatan rental dihitung menggunakan penjumlahan seluruh pembayaran rental pelanggan pada variabel `amount`.
+
+$$
+\text{Total Revenue} = \sum amount
+$$
+
+```{r analisis-data}
+
+revenue_data <- sakila_data %>%
+  group_by(name, rating) %>%
+  summarise(
+    total_revenue = sum(amount),
+    .groups = "drop"
+  )
+revenue_data
+```
+
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+ Seperti hasil heat map tadi, hasil analisis data ini menunjukkan bahwa kategori dan rating film memberikan pengaruh terhadap pendapatan rental pada database Sakila. Film dengan kategori dan rating tertentu menghasilkan total revenue yang lebih tinggi dibanding kategori dan rating lainnya. Hal ini menunjukkan bahwa preferensi pelanggan terhadap film dipengaruhi oleh jenis kategori serta klasifikasi rating film tersebut. Semakin tinggi minat pelanggan terhadap suatu kategori dan rating film, maka semakin besar pula pendapatan rental yang dihasilkan. Oleh karena itu, kategori dan rating film dapat menjadi faktor penting dalam menentukan tingkat pendapatan pada bisnis rental film.
+  </p>
+</div>
+```
+
+
+## Uji ANOVA Berdasarkan Kategori Film
+```{r anova-category}
+anova_category <- aov(amount ~ name, data = sakila_data)
+
+summary(anova_category)
+```
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+  Berdasarkan hasil uji ANOVA diperoleh nilai p-value kurang dari 0,05 yaitu < 2e-16. Nilai tersebut menunjukkan bahwa terdapat pengaruh signifikan antara kategori film terhadap pendapatan rental pada database Sakila. Hal ini berarti rata-rata pendapatan rental pada setiap kategori film memiliki perbedaan yang signifikan. Dengan demikian, kategori film dapat dianggap sebagai salah satu faktor yang memengaruhi tingkat pendapatan rental film. Beberapa kategori film memiliki tingkat minat pelanggan yang lebih tinggi sehingga menghasilkan revenue yang lebih besar dibanding kategori lainnya.
+  </p>
+</div>
+```
+
+
+## Uji ANOVA Berdasarkan Rating Film
+```{r anova-rating}
+
+anova_rating <- aov(amount ~ rating, data = sakila_data)
+
+summary(anova_rating)
+```
+<p>
+Intpretasi
+</p>
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+  Berdasarkan hasil uji ANOVA diperoleh nilai p-value sebesar 0,417. Nilai tersebut lebih besar dari taraf signifikansi 0,05 sehingga dapat disimpulkan bahwa tidak terdapat pengaruh signifikan antara rating film terhadap pendapatan rental pada database Sakila. Hal ini menunjukkan bahwa perbedaan rating film tidak menyebabkan perbedaan rata-rata pendapatan rental yang signifikan. Dengan demikian, klasifikasi rating film belum tentu menjadi faktor utama yang memengaruhi jumlah pendapatan rental film pada database Sakila.
+  </p>
+</div>
+```
+
+
+# Interpretasi Hasil Keseluruhan
+```{=html}
+<style>
+.insight-box {
+  background: linear-gradient(135deg, #F2DEDF, #EAE0DF);
+  color: black;
+  border-radius: 16px;
+  padding: 24px 30px;
+  margin: 24px 0;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.insight-box p {
+  text-align: justify;
+  line-height: 1.8;
+}
+</style>
+
+<div class="insight-box">
+  <p>
+ Berdasarkan hasil visualisasi dan analisis data yang telah dilakukan, diketahui bahwa kategori dan rating film memiliki pengaruh terhadap pendapatan rental pada database Sakila. Beberapa kategori film menghasilkan total revenue yang lebih tinggi dibanding kategori lainnya, yang menunjukkan bahwa pelanggan memiliki preferensi tertentu terhadap jenis film yang disewa. Selain itu, hasil heatmap menunjukkan bahwa kombinasi kategori dan rating tertentu memiliki pendapatan rental yang lebih besar dibanding kombinasi lainnya. Hal ini mengindikasikan bahwa minat pelanggan terhadap film dipengaruhi oleh kategori dan klasifikasi rating film tersebut.
+</p>
+<p>
+Berdasarkan hasil uji ANOVA, diperoleh bahwa kategori film memiliki pengaruh signifikan terhadap pendapatan rental karena menghasilkan p-value kurang dari 0,05. Sementara itu, hasil uji ANOVA pada rating film menghasilkan p-value sebesar 0,417 yang lebih besar dari 0,05 sehingga menunjukkan bahwa rating film tidak memiliki pengaruh signifikan terhadap pendapatan rental. Secara keseluruhan, analisis ini menunjukkan bahwa kategori film menjadi faktor yang lebih berpengaruh terhadap pendapatan rental dibandingkan rating film sehingga informasi mengenai kategori film dapat digunakan sebagai pertimbangan dalam strategi bisnis untuk meningkatkan pendapatan rental film.
+</p>
+</div>
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
